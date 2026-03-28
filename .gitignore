@@ -1,0 +1,24 @@
+# environment
+.env
+
+# database
+db/instacart.db
+db/schema_cache.json
+
+# data
+data/raw/
+
+# python cache
+__pycache__/
+*.pyc
+*.pyo
+schemas/__pycache__/
+agent/__pycache__/
+utils/__pycache__/
+testing_modules/__pycache__/
+
+# vscode
+.vscode/
+
+# streamlit
+.streamlit/

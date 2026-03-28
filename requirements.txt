@@ -1,0 +1,14 @@
+duckdb
+pandas
+openai
+langchain-openai
+langchain-core
+langgraph
+# streamlit //Moved frontend to REACT CDN
+plotly
+pyyaml
+fastapi
+uvicorn
+requests
+python-dotenv
+python-multipart
