@@ -1,0 +1,995 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Instacart BI Agent</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      :root {
+        --bg: #f8f9fb;
+        --surface: #ffffff;
+        --surface2: #f1f3f7;
+        --border: #e2e6ed;
+        --text: #1a1d23;
+        --text2: #6b7280;
+        --text3: #9ca3af;
+        --accent: #2563eb;
+        --accent-light: #eff6ff;
+        --accent-hover: #1d4ed8;
+        --green: #16a34a;
+        --green-light: #dcfce7;
+        --red: #dc2626;
+        --red-light: #fee2e2;
+        --orange: #ea580c;
+        --orange-light: #fff7ed;
+        --radius: 12px;
+        --radius-sm: 6px;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+        --shadow-md:
+          0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.04);
+      }
+
+      html,
+      body {
+        height: 100%;
+        font-family: "DM Sans", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      #root {
+        height: 100%;
+        display: flex;
+      }
+
+      /* Layout */
+      .layout {
+        display: flex;
+        width: 100%;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      /* Sidebar */
+      .sidebar {
+        width: 260px;
+        min-width: 260px;
+        height: 100vh;
+        background: var(--surface);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        padding: 24px 16px;
+        overflow-y: auto;
+      }
+
+      .sidebar-logo {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text);
+        margin-bottom: 2px;
+      }
+      .sidebar-sub {
+        font-size: 12px;
+        color: var(--text3);
+        margin-bottom: 20px;
+        font-family: "DM Mono", monospace;
+      }
+
+      .session-box {
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 8px 10px;
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        color: var(--text3);
+        margin-bottom: 20px;
+        word-break: break-all;
+      }
+
+      .section-label {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+        color: var(--text3);
+        margin-bottom: 8px;
+      }
+
+      .sample-list {
+        list-style: none;
+        margin-bottom: 24px;
+      }
+      .sample-item {
+        font-size: 12px;
+        color: var(--text2);
+        padding: 7px 10px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        border-left: 2px solid transparent;
+        margin-bottom: 2px;
+        transition: all 0.15s;
+        line-height: 1.4;
+      }
+      .sample-item:hover {
+        color: var(--accent);
+        border-left-color: var(--accent);
+        background: var(--accent-light);
+      }
+
+      .new-btn {
+        width: 100%;
+        padding: 9px;
+        border-radius: var(--radius-sm);
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        font-family: "DM Sans", sans-serif;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text2);
+        cursor: pointer;
+        transition: all 0.15s;
+        margin-bottom: 16px;
+      }
+      .new-btn:hover {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+      }
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11px;
+        color: var(--text3);
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--green);
+      }
+      .dot-off {
+        background: var(--red);
+      }
+
+      /* Main */
+      .main {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      .chat-area {
+        flex: 1;
+        overflow-y: auto;
+        padding: 24px 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      .empty-state {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: var(--text3);
+        gap: 8px;
+      }
+      .empty-icon {
+        font-size: 40px;
+        margin-bottom: 8px;
+      }
+      .empty-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text2);
+      }
+      .empty-sub {
+        font-size: 13px;
+      }
+
+      /* Messages */
+      .turn {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .user-row {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .user-bubble {
+        background: var(--accent);
+        color: white;
+        padding: 11px 16px;
+        border-radius: 18px 18px 4px 18px;
+        font-size: 14px;
+        line-height: 1.5;
+        max-width: 70%;
+        box-shadow: var(--shadow);
+      }
+
+      .assistant-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        max-width: 92%;
+      }
+
+      .tag {
+        display: inline-block;
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        font-weight: 500;
+        padding: 2px 8px;
+        border-radius: 4px;
+        letter-spacing: 0.3px;
+      }
+      .tag-data {
+        background: var(--green-light);
+        color: var(--green);
+      }
+      .tag-chat {
+        background: var(--accent-light);
+        color: var(--accent);
+      }
+      .tag-blocked {
+        background: var(--red-light);
+        color: var(--red);
+      }
+
+      .response-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-left: 3px solid var(--accent);
+        border-radius: var(--radius);
+        padding: 14px 18px;
+        font-size: 14px;
+        line-height: 1.7;
+        box-shadow: var(--shadow);
+      }
+
+      /* Pills */
+      .pills {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .pill {
+        font-family: "DM Mono", monospace;
+        font-size: 10px;
+        padding: 3px 9px;
+        border-radius: 20px;
+        background: var(--surface2);
+        border: 1px solid var(--border);
+        color: var(--text2);
+      }
+      .pill-green {
+        background: var(--green-light);
+        border-color: #86efac;
+        color: var(--green);
+      }
+      .pill-orange {
+        background: var(--orange-light);
+        border-color: #fdba74;
+        color: var(--orange);
+      }
+
+      /* Chart */
+      .chart-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px;
+        box-shadow: var(--shadow);
+      }
+
+      /* Expandable sections */
+      .expander {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        overflow: hidden;
+      }
+      .expander-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px 14px;
+        cursor: pointer;
+        user-select: none;
+        font-family: "DM Mono", monospace;
+        font-size: 11px;
+        color: var(--text3);
+        transition: background 0.1s;
+      }
+      .expander-header:hover {
+        background: var(--surface2);
+      }
+      .expander-body {
+        padding: 12px 14px;
+        border-top: 1px solid var(--border);
+      }
+
+      /* Table */
+      .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .data-table th {
+        text-align: left;
+        padding: 7px 10px;
+        background: var(--surface2);
+        border-bottom: 1px solid var(--border);
+        font-weight: 600;
+        color: var(--text2);
+        font-size: 11px;
+        font-family: "DM Mono", monospace;
+        white-space: nowrap;
+      }
+      .data-table td {
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text);
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .data-table tr:last-child td {
+        border-bottom: none;
+      }
+      .data-table tr:hover td {
+        background: var(--surface2);
+      }
+      .table-wrap {
+        overflow-x: auto;
+        max-height: 280px;
+        overflow-y: auto;
+        border-radius: var(--radius-sm);
+        border: 1px solid var(--border);
+      }
+
+      /* SQL */
+      .sql-block {
+        background: #0d1117;
+        color: #79c0ff;
+        font-family: "DM Mono", monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        padding: 14px;
+        border-radius: var(--radius-sm);
+        white-space: pre-wrap;
+        overflow-x: auto;
+      }
+
+      /* Input */
+      .input-area {
+        padding: 16px 32px 20px;
+        border-top: 1px solid var(--border);
+        background: var(--surface);
+      }
+      .input-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 10px 14px;
+        transition: border-color 0.15s;
+        box-shadow: var(--shadow);
+      }
+      .input-row:focus-within {
+        border-color: var(--accent);
+      }
+      .input-field {
+        flex: 1;
+        border: none;
+        background: transparent;
+        outline: none;
+        font-family: "DM Sans", sans-serif;
+        font-size: 14px;
+        color: var(--text);
+        resize: none;
+        min-height: 24px;
+        max-height: 120px;
+        line-height: 1.5;
+      }
+      .input-field::placeholder {
+        color: var(--text3);
+      }
+      .send-btn {
+        width: 34px;
+        height: 34px;
+        border-radius: 8px;
+        background: var(--accent);
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.15s;
+        flex-shrink: 0;
+      }
+      .send-btn:hover {
+        background: var(--accent-hover);
+      }
+      .send-btn:disabled {
+        background: var(--border);
+        cursor: not-allowed;
+      }
+      .send-btn svg {
+        width: 16px;
+        height: 16px;
+        fill: white;
+      }
+
+      /* Thinking */
+      .thinking {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--text3);
+        padding: 4px 0;
+      }
+      .dots {
+        display: flex;
+        gap: 4px;
+      }
+      .dot-anim {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        animation: bounce 1.2s infinite;
+      }
+      .dot-anim:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+      .dot-anim:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+      @keyframes bounce {
+        0%,
+        80%,
+        100% {
+          transform: scale(0.7);
+          opacity: 0.5;
+        }
+        40% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      /* Scrollbar */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--border);
+        border-radius: 3px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--text3);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel">
+      const { useState, useEffect, useRef, useCallback } = React;
+
+      const API = "http://127.0.0.1:8000";
+
+      const SAMPLES = [
+        "Top 10 most reordered products",
+        "Which department has the highest reorder rate?",
+        "Show order volume by day of week as a chart",
+        "Average basket size per order",
+        "Which aisle has the most unique products?",
+        "Reorder rate by department as bar chart",
+        "How many users ordered on weekends?",
+      ];
+
+      function genId() {
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+        });
+      }
+
+      function Tag({ intent }) {
+        if (!intent) return null;
+        const map = {
+          data_query: ["tag tag-data", "data query"],
+          chit_chat: ["tag tag-chat", "conversation"],
+          out_of_scope: ["tag tag-blocked", "out of scope"],
+        };
+        const [cls, label] = map[intent] || ["tag tag-chat", intent];
+        return <span className={cls}>{label}</span>;
+      }
+
+      function Pills({ rowCount, colCount, chartType, retryCount }) {
+        return (
+          <div className="pills">
+            <span className="pill pill-green">{rowCount} rows</span>
+            <span className="pill">{colCount} cols</span>
+            {chartType && chartType !== "none" && (
+              <span className="pill">{chartType.toUpperCase()}</span>
+            )}
+            {retryCount > 0 && (
+              <span className="pill pill-orange">retried {retryCount}x</span>
+            )}
+          </div>
+        );
+      }
+
+      function Expander({ label, children }) {
+        const [open, setOpen] = useState(false);
+        return (
+          <div className="expander">
+            <div className="expander-header" onClick={() => setOpen((o) => !o)}>
+              <span>{label}</span>
+              <span>{open ? "▲" : "▼"}</span>
+            </div>
+            {open && <div className="expander-body">{children}</div>}
+          </div>
+        );
+      }
+
+      function DataTable({ data, columns }) {
+        if (!data || data.length === 0)
+          return (
+            <p style={{ color: "var(--text3)", fontSize: 12 }}>No data.</p>
+          );
+        return (
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  {columns.map((c) => (
+                    <th key={c}>{c}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.slice(0, 100).map((row, i) => (
+                  <tr key={i}>
+                    {columns.map((c) => (
+                      <td key={c} title={String(row[c] ?? "")}>
+                        {String(row[c] ?? "")}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      }
+
+      function Chart({ plotConfig, resultData, resultColumns }) {
+        const ref = useRef(null);
+
+        useEffect(() => {
+          if (
+            !ref.current ||
+            !plotConfig ||
+            !resultData ||
+            resultData.length === 0
+          )
+            return;
+          const { chart_type, x_column, y_column, title } = plotConfig;
+          if (!chart_type || chart_type === "none" || !x_column || !y_column)
+            return;
+          if (
+            !resultColumns.includes(x_column) ||
+            !resultColumns.includes(y_column)
+          )
+            return;
+
+          const x = resultData.map((r) => r[x_column]);
+          const y = resultData.map((r) => r[y_column]);
+
+          const layout = {
+            title: {
+              text: title,
+              font: { family: "DM Sans", size: 14, color: "#6b7280" },
+            },
+            paper_bgcolor: "transparent",
+            plot_bgcolor: "transparent",
+            font: { family: "DM Sans", color: "#1a1d23" },
+            xaxis: {
+              gridcolor: "#e2e6ed",
+              linecolor: "#e2e6ed",
+              tickfont: { color: "#6b7280", size: 11 },
+            },
+            yaxis: {
+              gridcolor: "#e2e6ed",
+              linecolor: "#e2e6ed",
+              tickfont: { color: "#6b7280", size: 11 },
+            },
+            margin: { l: 48, r: 16, t: 48, b: 48 },
+            height: 340,
+          };
+
+          const config = { responsive: true, displayModeBar: false };
+
+          if (chart_type === "bar") {
+            Plotly.newPlot(
+              ref.current,
+              [
+                {
+                  type: "bar",
+                  x,
+                  y,
+                  marker: { color: "#2563eb", opacity: 0.85 },
+                  text: y.map((v) =>
+                    typeof v === "number" ? v.toLocaleString() : v,
+                  ),
+                  textposition: "outside",
+                  textfont: { size: 10, color: "#6b7280" },
+                },
+              ],
+              layout,
+              config,
+            );
+          } else if (chart_type === "line") {
+            Plotly.newPlot(
+              ref.current,
+              [
+                {
+                  type: "scatter",
+                  mode: "lines+markers",
+                  x,
+                  y,
+                  line: { color: "#2563eb", width: 2 },
+                  marker: { color: "#2563eb", size: 6 },
+                },
+              ],
+              layout,
+              config,
+            );
+          } else if (chart_type === "pie") {
+            Plotly.newPlot(
+              ref.current,
+              [
+                {
+                  type: "pie",
+                  labels: x,
+                  values: y,
+                  hole: 0.4,
+                  marker: {
+                    colors: [
+                      "#2563eb",
+                      "#16a34a",
+                      "#ea580c",
+                      "#9333ea",
+                      "#0891b2",
+                      "#ca8a04",
+                      "#dc2626",
+                    ],
+                  },
+                  textfont: { size: 11 },
+                },
+              ],
+              { ...layout, showlegend: true },
+              config,
+            );
+          } else if (chart_type === "scatter") {
+            Plotly.newPlot(
+              ref.current,
+              [
+                {
+                  type: "scatter",
+                  mode: "markers",
+                  x,
+                  y,
+                  marker: { color: "#2563eb", size: 7, opacity: 0.7 },
+                },
+              ],
+              layout,
+              config,
+            );
+          }
+
+          return () => {
+            if (ref.current) Plotly.purge(ref.current);
+          };
+        }, [plotConfig, resultData, resultColumns]);
+
+        if (
+          !plotConfig ||
+          plotConfig.chart_type === "none" ||
+          !plotConfig.x_column
+        )
+          return null;
+
+        return (
+          <div className="chart-card">
+            <div ref={ref} />
+          </div>
+        );
+      }
+
+      function Turn({ turn }) {
+        const { content, assistant } = turn;
+        if (!assistant)
+          return (
+            <div className="turn">
+              <div className="user-row">
+                <div className="user-bubble">{content}</div>
+              </div>
+            </div>
+          );
+
+        const {
+          intent,
+          content: resp,
+          sql,
+          result_data,
+          result_columns,
+          plot_config,
+          retry_count,
+        } = assistant;
+        const hasData = result_data && result_data.length > 0;
+
+        return (
+          <div className="turn">
+            <div className="user-row">
+              <div className="user-bubble">{content}</div>
+            </div>
+            <div className="assistant-wrap">
+              <Tag intent={intent} />
+              <div className="response-card">{resp}</div>
+              {hasData && (
+                <>
+                  <Pills
+                    rowCount={result_data.length}
+                    colCount={result_columns.length}
+                    chartType={plot_config?.chart_type}
+                    retryCount={retry_count}
+                  />
+                  <Chart
+                    plotConfig={plot_config}
+                    resultData={result_data}
+                    resultColumns={result_columns}
+                  />
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <div style={{ flex: 1 }}>
+                      <Expander label="view data">
+                        <DataTable
+                          data={result_data}
+                          columns={result_columns}
+                        />
+                      </Expander>
+                    </div>
+                    {sql && (
+                      <div style={{ flex: 1 }}>
+                        <Expander label="view sql">
+                          <div className="sql-block">{sql}</div>
+                        </Expander>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      function Thinking() {
+        return (
+          <div className="thinking">
+            <div className="dots">
+              <div className="dot-anim" />
+              <div className="dot-anim" />
+              <div className="dot-anim" />
+            </div>
+            <span>Thinking...</span>
+          </div>
+        );
+      }
+
+      function App() {
+        const [threadId] = useState(() => genId());
+        const [history, setHistory] = useState([]);
+        const [input, setInput] = useState("");
+        const [loading, setLoading] = useState(false);
+        const [apiOk, setApiOk] = useState(false);
+        const chatRef = useRef(null);
+        const textRef = useRef(null);
+
+        useEffect(() => {
+          fetch(`${API}/health`)
+            .then((r) => r.ok && setApiOk(true))
+            .catch(() => {});
+        }, []);
+
+        useEffect(() => {
+          if (chatRef.current)
+            chatRef.current.scrollTop = chatRef.current.scrollHeight;
+        }, [history, loading]);
+
+        const send = useCallback(
+          async (query) => {
+            const q = (query || input).trim();
+            if (!q || loading) return;
+            setInput("");
+            setLoading(true);
+            setHistory((h) => [...h, { content: q, assistant: null }]);
+
+            try {
+              const res = await fetch(`${API}/chat`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ query: q, thread_id: threadId }),
+              });
+              const data = await res.json();
+              setHistory((h) => {
+                const updated = [...h];
+                updated[updated.length - 1] = {
+                  content: q,
+                  assistant: {
+                    intent: data.intent,
+                    content: data.response,
+                    sql: data.sql,
+                    result_data: data.result_data,
+                    result_columns: data.result_columns,
+                    plot_config: data.plot_config,
+                    retry_count: data.retry_count,
+                  },
+                };
+                return updated;
+              });
+            } catch (e) {
+              setHistory((h) => {
+                const updated = [...h];
+                updated[updated.length - 1] = {
+                  content: q,
+                  assistant: {
+                    intent: "",
+                    content:
+                      "Error: Could not reach the API. Is the server running?",
+                    sql: "",
+                    result_data: [],
+                    result_columns: [],
+                    plot_config: {},
+                    retry_count: 0,
+                  },
+                };
+                return updated;
+              });
+            } finally {
+              setLoading(false);
+            }
+          },
+          [input, loading, threadId],
+        );
+
+        const handleKey = (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            send();
+          }
+        };
+
+        const newConversation = () => {
+          setHistory([]);
+          setInput("");
+        };
+
+        return (
+          <div className="layout">
+            <aside className="sidebar">
+              <div className="sidebar-logo">BI Agent</div>
+              <div className="sidebar-sub">Instacart Analytics</div>
+              <div className="session-box">
+                SESSION {threadId.slice(0, 8).toUpperCase()}
+              </div>
+
+              <div className="section-label">Try asking</div>
+              <ul className="sample-list">
+                {SAMPLES.map((s, i) => (
+                  <li
+                    key={i}
+                    className="sample-item"
+                    onClick={() => !loading && send(s)}
+                  >
+                    {s}
+                  </li>
+                ))}
+              </ul>
+
+              <button className="new-btn" onClick={newConversation}>
+                New Conversation
+              </button>
+
+              <div className="status-row">
+                <span className={apiOk ? "dot" : "dot dot-off"} />
+                <span>{apiOk ? "API online" : "API offline"}</span>
+              </div>
+            </aside>
+
+            <div className="main">
+              <div className="chat-area" ref={chatRef}>
+                {history.length === 0 && !loading && (
+                  <div className="empty-state">
+                    <div className="empty-icon">🛒</div>
+                    <div className="empty-title">Instacart BI Agent</div>
+                    <div className="empty-sub">
+                      Ask anything about orders, products, and shopping trends
+                    </div>
+                  </div>
+                )}
+                {history.map((turn, i) => (
+                  <Turn key={i} turn={turn} />
+                ))}
+                {loading && <Thinking />}
+              </div>
+
+              <div className="input-area">
+                <div className="input-row">
+                  <textarea
+                    ref={textRef}
+                    className="input-field"
+                    placeholder="Ask anything about Instacart data..."
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKey}
+                    rows={1}
+                    disabled={loading}
+                  />
+                  <button
+                    className="send-btn"
+                    onClick={() => send()}
+                    disabled={loading || !input.trim()}
+                  >
+                    <svg viewBox="0 0 24 24">
+                      <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>
