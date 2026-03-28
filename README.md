@@ -1,227 +1,270 @@
 # BI Agent
 
-BI Agent is a conversational analytics app for the Instacart market basket dataset. It uses an LLM-powered LangGraph workflow to classify a user request, generate DuckDB SQL, execute the query, and return a natural-language answer with optional chart metadata for the UI.
+A conversational analytics system built on the Instacart grocery dataset. Ask questions in plain English and get SQL-backed answers with charts, data tables, and natural language summaries.
 
-The repository includes:
+Built with LangGraph, FastAPI, DuckDB, and GPT-4o. The frontend is a single React page served directly by FastAPI — no Node, no npm, no build step.
 
-- A FastAPI backend in `server.py`
-- A Streamlit chat UI in `app.py`
-- A lightweight static React UI in `frontend/index.html`
-- DuckDB ingestion and schema-caching utilities
-- Prompt files, typed response schemas, and test scripts for the agent flow
+---
 
 ## What It Does
 
-Given a question like:
+Ask questions like:
 
 - "What are the top 10 most reordered products?"
 - "Which department has the highest reorder rate?"
 - "Show order volume by day of week as a chart"
+- "Now filter that to only the produce department"
 
-the agent will:
+The agent will:
 
-1. Run a guardrail step to detect `data_query`, `chit_chat`, or `out_of_scope`
-2. Classify whether the question is a follow-up, which tables are needed, and whether a plot is useful
-3. Retrieve schema metadata from a local cache
-4. Generate SQL for DuckDB
-5. Execute the query with retry-on-error logic
-6. Produce a concise answer and chart configuration for the frontend
+1. Classify the intent — chit-chat, out-of-scope, or data query
+2. Identify which tables are needed and whether a chart is useful
+3. Fetch schema metadata for only those tables
+4. Generate DuckDB SQL and execute it
+5. Retry with error feedback if execution fails (up to 2 retries)
+6. Return a natural language summary, chart config, raw data, and the SQL
 
-## Repo Structure
-
-```text
-.
-|-- agent/              # LangGraph nodes, state, tools, graph wiring
-|-- data/raw/           # Source Instacart CSV files
-|-- db/                 # DuckDB database and ingest script
-|-- frontend/           # Static React frontend served by FastAPI
-|-- prompts/            # YAML prompts used by each agent step
-|-- schemas/            # Pydantic structured output models
-|-- testing_modules/    # Script-style test and debugging helpers
-|-- utils/              # LLM client, schema cache builder, prompt loader
-|-- app.py              # Streamlit UI
-|-- server.py           # FastAPI API server
-|-- config.py           # Paths, models, env config
-|-- requirements.txt
-```
+---
 
 ## Architecture
 
-The main workflow is defined in `agent/graph.py`:
+```
+Browser (React)
+    ↓  POST /chat
+FastAPI (server.py)
+    ↓  app_graph.invoke()
+LangGraph Agent
+    ├── guardrail_node     classify intent, handle chit-chat and off-topic
+    ├── classifier_node    identify tables, plot type, follow-up detection
+    ├── sql_generator_node generate SQL, execute via DuckDB, retry on failure
+    └── response_node      natural language summary + plot config
+    ↓
+DuckDB (33.8M rows) + OpenAI GPT-4o
+```
 
-- `guardrail_node`: filters chit-chat and out-of-scope questions early
-- `classifier_node`: identifies tables/views, follow-up status, and plot intent
-- `sql_generator_node`: generates SQL and retries when execution fails
-- `response_node`: turns query results into a user-facing answer and plot config
+The graph uses `MemorySaver` checkpointing keyed by `thread_id` so follow-up questions preserve context across turns.
 
-The graph uses `MemorySaver` checkpointing, keyed by `thread_id`, so multi-turn conversations can preserve context.
+See `docs/ARCHITECTURE.md` for a full breakdown of every node, tool, and design decision.
 
-## Data Model
+---
 
-The app is built around the Instacart dataset and creates two important views:
+## Repo Structure
 
-- `order_products`: unions prior and train order-product rows
-- `product_full`: enriches products with aisle and department names
+```
+.
+├── agent/              LangGraph nodes, state, tools, graph wiring
+├── db/                 DuckDB ingest script
+├── docs/               Architecture and data documentation, HLD diagram
+├── frontend/           Static React UI served by FastAPI
+├── prompts/            YAML prompt files for each agent node
+├── schemas/            Pydantic structured output models
+├── testing_modules/    Per-node test scripts
+├── utils/              LLM client, schema builder, prompt loader, tracer
+├── server.py           FastAPI backend
+├── config.py           Paths, model names, env config
+└── requirements.txt
+```
 
-These views are the preferred query surfaces for generated SQL.
+---
 
 ## Prerequisites
 
-- Python 3.11 recommended
-- An OpenAI API key
-- Instacart CSV files placed in `data/raw/`
+- Python 3.11+
+- OpenAI API key
+- Instacart CSV files in `data/raw/`
 
-Expected CSV files:
+Download the dataset from Kaggle:
+https://www.kaggle.com/datasets/psparks/instacart-market-basket-analysis
 
-- `orders.csv`
-- `order_products__prior.csv`
-- `order_products__train.csv`
-- `products.csv`
-- `aisles.csv`
-- `departments.csv`
+Expected files:
 
-Dataset source referenced by the repo:
+```
+data/raw/orders.csv
+data/raw/order_products__prior.csv
+data/raw/order_products__train.csv
+data/raw/products.csv
+data/raw/aisles.csv
+data/raw/departments.csv
+```
 
-- Kaggle: Instacart Market Basket Analysis
+---
 
 ## Setup
 
-### 1. Create and activate a virtual environment
-
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
-### 2. Install dependencies
+### 1. Install dependencies
 
 ```powershell
 pip install -r requirements.txt
 ```
 
-### 3. Create `.env`
-
-Create a `.env` file in the repo root:
+### 2. Create `.env`
 
 ```env
 OPENAI_API_KEY=sk-...
-LANGCHAIN_API_KEY=
+
+# Optional: LangSmith observability
+LANGCHAIN_API_KEY=ls__...
 LANGCHAIN_TRACING_V2=true
 LANGCHAIN_PROJECT=bi-agent
 ```
 
-Only `OPENAI_API_KEY` is required. If it is missing, `config.py` raises an error at startup.
+Only `OPENAI_API_KEY` is required. The app raises a clear error at startup if it is missing.
 
-## Prepare the Database
-
-### 1. Ingest the CSV data into DuckDB
+### 3. Ingest the data
 
 ```powershell
 python db\ingest.py
 ```
 
-To force a rebuild:
+This loads all 6 CSVs into DuckDB, creates analytical views, validates column types, and runs data quality checks. Use `--force` to rebuild from scratch:
 
 ```powershell
 python db\ingest.py --force
 ```
 
-This creates or refreshes `db/instacart.db`, validates key column types, and runs a few data-quality checks.
-
-### 2. Build the schema cache
+### 4. Build the schema cache
 
 ```powershell
 python -c "from utils.schema_builder import build_schema_cache; build_schema_cache(force=True)"
 ```
 
-This generates `db/schema_cache.json`, which the agent uses to retrieve table and view metadata before generating SQL.
+This generates `db/schema_cache.json` — LLM-generated table and column descriptions used by the agent at query time. Takes about 60 seconds on first run. Subsequent runs load from cache instantly.
+
+---
 
 ## Running the App
 
-### Option A: Recommended development flow
-
-Start the FastAPI backend:
+Start the FastAPI server:
 
 ```powershell
 python -m uvicorn server:app --reload --port 8000
 ```
 
-In a second terminal, start the Streamlit frontend:
+Open the browser at:
 
-```powershell
-streamlit run app.py
+```
+http://127.0.0.1:8000
 ```
 
-Then open:
+The React frontend is served directly by FastAPI. No second terminal needed.
 
-- Streamlit UI: `http://localhost:8501`
-- API docs: `http://127.0.0.1:8000/docs`
-- API health check: `http://127.0.0.1:8000/health`
+Useful endpoints:
 
-### Option B: Static frontend only
-
-If you just want the static React page served by FastAPI, run the API server and open:
-
-```text
-http://127.0.0.1:8000/
 ```
+GET  /health   server health check
+POST /chat     main agent endpoint
+GET  /docs     auto-generated API docs
+```
+
+---
 
 ## API
 
-### `GET /health`
-
-Returns:
-
-```json
-{"status":"ok"}
-```
-
 ### `POST /chat`
 
-Request body:
+Request:
 
 ```json
 {
   "query": "What are the top 5 most reordered products?",
-  "thread_id": "your-session-id"
+  "thread_id": "your-session-uuid"
 }
 ```
 
-Response shape:
+Response:
 
 ```json
 {
-  "thread_id": "your-session-id",
+  "thread_id": "your-session-uuid",
   "intent": "data_query",
-  "response": "Natural language answer",
-  "sql": "SELECT ...",
-  "result_data": [],
-  "result_columns": [],
-  "plot_config": {},
+  "response": "Banana is the most reordered product with 415,166 reorders...",
+  "sql": "SELECT pf.product_name, COUNT(*) AS total_reorders FROM...",
+  "result_data": [...],
+  "result_columns": ["product_name", "total_reorders"],
+  "plot_config": {
+    "chart_type": "bar",
+    "x_column": "product_name",
+    "y_column": "total_reorders",
+    "title": "Top 5 Most Reordered Products"
+  },
   "retry_count": 0,
   "error": ""
 }
 ```
 
-## Testing and Debugging
+---
 
-The repo includes script-style test modules under `testing_modules/` for checking individual agent steps and graph behavior, for example:
+## Data Model
+
+The dataset has 6 raw tables totalling 33.8 million rows. Two views are created at ingest time and are the preferred query surfaces:
+
+**`order_products`** — unions prior and train order-product rows into a single 33.8M row table. The prior/train split is a machine learning artifact irrelevant for BI.
+
+**`product_full`** — joins products, aisles, and departments into a flat table. Products labeled `aisle='missing'` (Instacart's uncategorized catch-all) are excluded at the view level.
+
+| Table | Rows |
+|---|---|
+| orders | 3,421,083 |
+| order_products_prior | 32,434,489 |
+| order_products_train | 1,384,617 |
+| products | 49,688 |
+| aisles | 134 |
+| departments | 21 |
+| order_products (view) | 33,819,106 |
+| product_full (view) | 48,430 |
+
+---
+
+## Security
+
+SQL injection is prevented at three independent layers:
+
+1. The guardrail prompt explicitly blocks destructive SQL commands and prompt injection attempts
+2. The query executor runs a regex check against a forbidden keyword list before execution (DROP, DELETE, TRUNCATE, INSERT, UPDATE, ALTER, etc.)
+3. The DuckDB connection is opened read-only — write operations are physically rejected
+
+---
+
+## Observability
+
+If `LANGCHAIN_API_KEY` is set, all LangGraph node traces are sent to LangSmith automatically. Each query shows the full node-by-node trace with inputs, outputs, token usage, and latency at `smith.langchain.com`.
+
+Local console tracing is also enabled via `utils/tracer.py` — every node entry, table selection, SQL attempt, and response summary is logged to stdout.
+
+---
+
+## Testing
+
+Per-node test scripts are in `testing_modules/`:
 
 ```powershell
 python testing_modules\test_graph.py
 python testing_modules\test_guardrail.py
+python testing_modules\test_classifier.py
+python testing_modules\test_sql_generator.py
 python testing_modules\test_response.py
 ```
 
-These are useful for local debugging, but they are not yet organized as a formal `pytest` suite.
+These are developer utilities for checking individual agent steps, not a formal pytest suite.
 
-## Notes and Caveats
+---
 
-- `config.py` currently hardcodes `OPENAI_MODEL = "gpt-4.1"` and `OPENAI_MINI_MODEL = "gpt-4o-mini"`.
-- Query execution is read-only against DuckDB.
-- `MAX_RETRIES` is set to `2`, so SQL generation gets up to 3 execution attempts total.
-- Result sizes are intended to stay manageable; non-aggregate queries are guided to limit output.
-- Some older testing scripts appear to lag behind the current state shape, so treat them as developer utilities rather than strict regression tests.
+## Known Limitations
+
+- The dataset has no absolute timestamps. Questions about monthly or yearly trends cannot be answered accurately. The system will attempt a related temporal analysis but cannot reconstruct calendar dates.
+- Semantically wrong but executable SQL is not detected. The retry loop catches execution failures only.
+- `MemorySaver` is in-memory — conversation history is lost on server restart.
+- Result sets are capped at 1000 rows for non-aggregate queries.
+
+---
+
+## Documentation
+
+- `docs/ARCHITECTURE.md` — full node-by-node architecture, design decisions, tool reference
+- `docs/DATA_AND_METADATA.md` — data ingestion pipeline and schema cache generation in detail
+- `docs/bi_agent_hld.drawio` — draw.io HLD diagram
+
+---
 
 ## Suggested Questions
 
@@ -230,12 +273,6 @@ These are useful for local debugging, but they are not yet organized as a formal
 - Show order volume by day of week as a chart
 - What is the average basket size per order?
 - Which aisle has the most unique products?
+- Which aisles have the highest reorder rate and does that correlate with how early products are added to the cart?
 - How many unique users ordered on weekends?
-
-## Future Improvements
-
-- Convert `testing_modules/` into automated `pytest` coverage
-- Add startup scripts for ingest + schema cache bootstrap
-- Add authentication and narrower CORS settings for production
-- Containerize the backend and frontend for simpler setup
-- Add evaluation datasets for SQL correctness and response quality
+- Show me the top 5 departments by order volume, then filter to only those with reorder rate above 0.65
